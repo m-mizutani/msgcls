@@ -24,6 +24,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "../src/msgcls.hpp"
 #include "./optparse.h"
@@ -31,8 +35,28 @@
 int main(int argc, char *argv[]) {
   // Configure options
   optparse::OptionParser psr = optparse::OptionParser();
+  psr.add_option("-F").dest("fluentd_format").action("store_true")
+    .help("Enable parser with fluentd format");
+  
   optparse::Values& opt = psr.parse_args(argc, argv);
   std::vector <std::string> args = psr.args();
+
+  if (args.size() != 1) {
+    std::cerr << "syntax) msgcls <key> <target_file> ..." << std::endl;
+    return EXIT_FAILURE;
+  }
+  
+  msgcls::MsgCls *mc = new msgcls::MsgCls(args[0]);
+
+  if (opt.get("fluentd_format")) {
+    mc->set_format(msgcls::Format::FLUENTD);
+  }
+  
+  for (size_t i = 1; i < args.size(); i++) {
+    int fd = ::open(args[i].c_str(), O_RDONLY);
+    mc->run(fd);
+    ::close(fd);
+  }
   return EXIT_SUCCESS;
 }
 
