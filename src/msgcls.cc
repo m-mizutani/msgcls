@@ -14,7 +14,6 @@ namespace msgcls {
   
   MsgCls::MsgCls(const std::string &key) : key_(key) {
     this->unpkr_ = new msgpack::unpacker();
-    this->unpkr_->reserve_buffer(BUFSIZE);
   }
   
   MsgCls::~MsgCls() {
@@ -22,17 +21,52 @@ namespace msgcls {
   }
   
   void MsgCls::run(int fd) {
-    int rc;
-    char buf[BUFSIZE];
+
     msgpack::unpacked result;
-    while (0 < (rc = read(fd, buf, sizeof(buf)))) {
-      memcpy(this->unpkr_->buffer(), buf, rc);
+    // const size_t max_size = this->unpkr_->buffer_capacity();
+    
+    while (true) {
+
+      this->unpkr_->reserve_buffer(BUFSIZE);
+      int rc = read(fd, this->unpkr_->buffer(),
+                    this->unpkr_->buffer_capacity());
+      if (rc <= 0) {
+        break;
+      }
+      
       this->unpkr_->buffer_consumed(rc);
 
-      while(this->unpkr_->next(&result)) {
-        std::cout << result.get() << std::endl;
+      while(this->unpkr_->execute()) {
+        
+        const msgpack::object &msg = this->unpkr_->data();
+        try {
+          if (msg.type == msgpack::type::ARRAY && msg.via.array.size == 3) {
+            // Fluentd format message
+            msgpack::object &map_data = msg.via.array.ptr[2];
+            for (auto &kv : map_data.as<std::map<std::string, msgpack::object> >()) {
+              if (kv.first == this->key_) {
+                // std::cout << kv.first << " found!" << std::endl;
+              }
+            }
+          } else if (msg.type == msgpack::type::MAP) {
+            // Plain map message
+            for (auto &kv : msg.as<std::map<std::string, msgpack::object> >()) {
+              if (kv.first == this->key_) {
+                // std::cout << kv.first << " found!" << std::endl;
+              }
+            }
+          }
+        } catch (msgpack::type_error &e) {
+          std::cout << msg << std::endl;
+        }
+        delete this->unpkr_->release_zone();
+        this->unpkr_->reset();
       }
+      // std::auto_ptr<msgpack::zone> z(upk.release_zone());
+
+      // this->unpkr_->release_zone();
     }
+
   }
 
   

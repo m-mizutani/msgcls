@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
   optparse::Values& opt = psr.parse_args(argc, argv);
   std::vector <std::string> args = psr.args();
 
-  if (args.size() != 1) {
+  if (args.size() < 2) {
     std::cerr << "syntax) msgcls <key> <target_file> ..." << std::endl;
     return EXIT_FAILURE;
   }
