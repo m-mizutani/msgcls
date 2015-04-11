@@ -2,6 +2,7 @@
 #define __SRC_MSGCLS_HPP__
 
 #include <string>
+#include <vector>
 #include <msgpack.hpp>
 
 namespace msgcls {
@@ -16,6 +17,8 @@ namespace msgcls {
     msgpack::unpacker *unpkr_;
     std::string key_;
     Format fmt_;
+    std::vector<std::string> log_;
+    
   public:
     MsgCls(const std::string &key);
     ~MsgCls();
@@ -23,6 +26,8 @@ namespace msgcls {
     void run(int fd);
   };
 
+  double ratio(const char *buf1, const size_t buf1_size,
+               const char *buf2, const size_t buf2_size);
   double ratio(const std::string &a, const std::string &b);
 }
 
