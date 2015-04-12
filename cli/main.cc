@@ -37,7 +37,9 @@ int main(int argc, char *argv[]) {
   optparse::OptionParser psr = optparse::OptionParser();
   psr.add_option("-o").dest("out_dir").set_default(".")
     .help("Enable parser with fluentd format");
-  
+  psr.add_option("-d").dest("dry_run").action("store_true")
+    .help("Enable dry-run mode (no output to file");
+
   optparse::Values& opt = psr.parse_args(argc, argv);
   std::vector <std::string> args = psr.args();
 
@@ -47,9 +49,11 @@ int main(int argc, char *argv[]) {
   }
   
   msgcls::MsgCls *mc = new msgcls::MsgCls(args[0]);
-  msgcls::FileEmitter *femit = new msgcls::FileEmitter(opt["out_dir"]);
+  if (! opt.get("dry_run")) {
+    msgcls::FileEmitter *femit = new msgcls::FileEmitter(opt["out_dir"]);
+    mc->set_emitter(femit);
+  }
   
-  mc->set_emitter(femit);
   for (size_t i = 1; i < args.size(); i++) {
     int fd = ::open(args[i].c_str(), O_RDONLY);
     mc->run(fd);
