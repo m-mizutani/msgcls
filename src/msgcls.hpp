@@ -3,16 +3,28 @@
 
 #include <string>
 #include <vector>
+#include "./ptw.h"
 
 namespace msgpack {
   class unpacker;
-  class object;
+  struct object;
 }
 
 namespace msgcls {
-  enum Format {
-    PLAIN = 0,
-    FLUENTD,
+  class Cluster;
+  
+  class RatioWorker : public ptw::Queue {
+  private:
+    const Cluster &c_;
+    std::string data_;
+    double r_;
+
+  public:
+    RatioWorker(const Cluster &c, const std::string &data) :
+    c_(c), data_(data) {}
+    void exec();
+    double ratio() const { return this->r_; };
+    const Cluster& cluster() const { return this->c_; }
   };
 
   class Cluster {
@@ -31,7 +43,8 @@ namespace msgcls {
   class Classifier {
   private:
     std::vector<Cluster*> cluster_;
-    
+    ptw::Ptw ptw_;
+
   public:
     Classifier() {};
     ~Classifier() {};
@@ -63,14 +76,12 @@ namespace msgcls {
     static const size_t BUFSIZE;
     msgpack::unpacker *unpkr_;
     std::string key_;
-    Format fmt_;
     Classifier *classifier_;
     Emitter *emitter_;
     
   public:
     MsgCls(const std::string &key);
     ~MsgCls();
-    void set_format(msgcls::Format fmt) { this->fmt_ = fmt; }
     void run(int fd);
     void set_emitter(Emitter *emitter) { this->emitter_ = emitter; }
   };

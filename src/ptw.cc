@@ -201,9 +201,8 @@ namespace ptw {
     worker_(worker_num, NULL), 
     last_ptr_(0),
     in_count_(0),
-    out_count_(0),
-    q_total_(0), q_count_(0)
-  { 
+    out_count_(0)
+  {
     ::pthread_mutex_init (&(this->mutex_), NULL);
     ::pthread_cond_init (&(this->cond_), NULL);
 
@@ -243,7 +242,7 @@ namespace ptw {
     }
 
     this->in_count_++;
-    int qc = this->worker_[this->last_ptr_]->input_queue (q);
+    this->worker_[this->last_ptr_]->input_queue (q);
     // this->q_total_ += qc;
     // this->q_count_ += 1;
   }

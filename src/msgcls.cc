@@ -16,6 +16,10 @@
 #include "./msgcls.hpp"
 
 namespace msgcls {
+  void RatioWorker::exec() {
+    this->r_ = msgcls::ratio(this->c_.base(), this->data_);
+  }
+  
   
   Cluster::Cluster(const std::string &base) : base_(base) {
     clx::md5 md;
@@ -28,34 +32,44 @@ namespace msgcls {
   }
 
   const Cluster& Classifier::classify(const std::string &data) {
-    typedef std::tuple<Cluster*, double> Result;
-    std::vector<Result> res;
+    std::vector<RatioWorker*> res;
     double th = 0.7, th_size = 0.5;
     
     for (auto &c : this->cluster_) {
       double s1 = static_cast<double>(c->base().length());
       double s2 = static_cast<double>(data.length());
       if (s1 * (th_size) < s2 && s2 < s1 * (2 - (th_size))) {
-        res.push_back(std::tuple<Cluster*, double>(c, c->ratio(data)));
+        res.push_back(new RatioWorker(*c, data));
       }
     }
 
-    auto r =
-      std::max_element(res.begin(), res.end(),
-                       [] (const Result& r1, const Result& r2) {
-                         return std::get<1>(r1) < std::get<1>(r2);
-                       });
-
-    Cluster *c = nullptr;
-    if (r != res.end() && std::get<1>(*r) > th) {
-      c = std::get<0>(*r);
-      // debug(true, "match with exists %p", c);
-    } else {
-      c = new Cluster(data);
-      debug(true, "new cluster: %p", c);
-      this->cluster_.push_back(c);
+    for (auto rp : res) {
+      this->ptw_.push_queue(rp);
+    }
+    while (nullptr != this->ptw_.pop_queue()) {
+      // Calculate.
     }
     
+    auto r =
+      std::max_element(res.begin(), res.end(),
+                       [] (const RatioWorker* r1, const RatioWorker* r2) {
+                         return r1->ratio() < r2->ratio();
+                       });
+
+    const Cluster *c = nullptr;
+    if (r != res.end() && (*r)->ratio() > th) {
+      c = &((*r)->cluster());
+      // debug(true, "match with exists %p", c);
+    } else {
+      Cluster *nc = new Cluster(data);
+      debug(true, "new cluster: %p", nc);
+      this->cluster_.push_back(nc);
+      c = nc;
+    }
+
+    for(size_t i = 0; i < res.size(); i++) {
+      delete res[i];
+    }
     assert(c);
     return *c;
   }

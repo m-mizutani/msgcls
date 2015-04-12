@@ -101,9 +101,6 @@ namespace ptw {
     int in_count_;
     int out_count_;
 
-    size_t q_total_;
-    size_t q_count_;
-
     void ret_queue (QueueList * q_list);
 
   public:
