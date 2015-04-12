@@ -5,25 +5,98 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <time.h>
-
+#include <assert.h>
+#include <fcntl.h>
+#include <uuid/uuid.h>
+#include <msgpack.hpp>
+#include <iterator>
 #include "./debug.h"
 
-// #include "./md5.h"
+#include "./clx/md5.h"
 #include "./msgcls.hpp"
 
 namespace msgcls {
+  
+  Cluster::Cluster(const std::string &base) : base_(base) {
+    clx::md5 md;
+    this->hash_hex_ = md.encode(this->base_).to_string();
+  }
+
+
+  double Cluster::ratio(const std::string& data) {
+    return msgcls::ratio(this->base_, data);
+  }
+
+  const Cluster& Classifier::classify(const std::string &data) {
+    typedef std::tuple<Cluster*, double> Result;
+    std::vector<Result> res;
+    double th = 0.7, th_size = 0.5;
+    
+    for (auto &c : this->cluster_) {
+      double s1 = static_cast<double>(c->base().length());
+      double s2 = static_cast<double>(data.length());
+      if (s1 * (th_size) < s2 && s2 < s1 * (2 - (th_size))) {
+        res.push_back(std::tuple<Cluster*, double>(c, c->ratio(data)));
+      }
+    }
+
+    auto r =
+      std::max_element(res.begin(), res.end(),
+                       [] (const Result& r1, const Result& r2) {
+                         return std::get<1>(r1) < std::get<1>(r2);
+                       });
+
+    Cluster *c = nullptr;
+    if (r != res.end() && std::get<1>(*r) > th) {
+      c = std::get<0>(*r);
+      // debug(true, "match with exists %p", c);
+    } else {
+      c = new Cluster(data);
+      debug(true, "new cluster: %p", c);
+      this->cluster_.push_back(c);
+    }
+    
+    assert(c);
+    return *c;
+  }
+
+  
+  void Emitter::emit(const msgpack::object &obj, const Cluster& cluster) {
+
+  }
+  
+  FileEmitter::FileEmitter(const std::string &out_dir) : out_dir_(out_dir) {
+  }
+  FileEmitter::~FileEmitter() {
+  }
+  void FileEmitter::emit(const msgpack::object &obj, const Cluster& cluster) {
+    msgpack::sbuffer sbuf;
+    msgpack::pack(sbuf, obj);
+    std::string path = this->out_dir_;
+    path += "/" + cluster.hv() + ".msg";
+    int fd = open(path.c_str(), O_CREAT | O_WRONLY | O_APPEND, 0644);
+    write(fd, sbuf.data(), sbuf.size());
+    close(fd);
+  }
+
+
+  
   const size_t MsgCls::BUFSIZE = 0xffff;
   
-  MsgCls::MsgCls(const std::string &key) : key_(key) {
+  MsgCls::MsgCls(const std::string &key) : key_(key), emitter_(nullptr) {
     this->unpkr_ = new msgpack::unpacker();
+    this->classifier_ = new Classifier();
   }
   
   MsgCls::~MsgCls() {
+    delete this->classifier_;
     delete this->unpkr_;
   }
 
   
   void MsgCls::run(int fd) {
+    int cnt = 0;
+    time_t prev_ts = time(nullptr);
     
     while (true) {
       this->unpkr_->reserve_buffer(BUFSIZE);
@@ -40,6 +113,14 @@ namespace msgcls {
         const msgpack::object &msg = this->unpkr_->data();
         const msgpack::object *obj = nullptr;
         try {
+          // Check performance.
+          cnt++;
+          if (cnt % 1000 == 0) {
+            time_t ts = time(nullptr);
+            std::cout << ts - prev_ts << ", " << cnt << ", " << this->classifier_->cluster_size() << std::endl;
+            prev_ts = ts;
+          }
+          
           if (msg.type == msgpack::type::ARRAY && msg.via.array.size == 3) {
             // Fluentd format message
             obj = &(msg.via.array.ptr[2]);
@@ -55,11 +136,11 @@ namespace msgcls {
                   msgpack::object_raw &obj_raw = kv.second.via.raw;
                   std::string data(obj_raw.ptr, obj_raw.size);
                   // std::cout << obj_raw.size << " found!" << std::endl;
-                  for (size_t i = 0; i < this->log_.size(); i++) {
-                    ratio(data, this->log_[i]);
+                  
+                  const Cluster &c = this->classifier_->classify(data);
+                  if (this->emitter_) {
+                    this->emitter_->emit(msg, c);
                   }
-                  this->log_.push_back(data);
-                  std::cout << this->log_.size() << " " << time(nullptr) << std::endl;
                 }
               }
             }
