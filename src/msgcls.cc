@@ -62,7 +62,7 @@ namespace msgcls {
       // debug(true, "match with exists %p", c);
     } else {
       Cluster *nc = new Cluster(data);
-      debug(true, "new cluster: %p", nc);
+      debug(true, "new cluster: %p (%s)", nc, nc->base().c_str());
       this->cluster_.push_back(nc);
       c = nc;
     }
@@ -251,6 +251,28 @@ namespace msgcls {
       R2[m - 1] = ADD;
     }
     
+    double matchd = 0;
+    {
+      size_t i = 0, j = 0;
+      while (i < buf1_size && j < buf2_size) {
+        if (R1[i] == COM && R2[j] == COM) {
+          assert(buf1[i] == buf2[j]);
+          i++; j++;
+          matchd += 2;
+        } else {
+          if (R1[i] == COM) {
+            j++;
+          } else if (R2[j] == COM) {
+            i++;
+          } else {
+            i++; j++;
+            matchd += 1;
+          }
+        }
+      }
+    }
+
+    /*
     double match = 0;
     for (size_t i = 0; i < buf1_size; i++) {
       match += (R1[i] == COM) ? 1 : 0;
@@ -258,7 +280,12 @@ namespace msgcls {
     for (size_t j = 0; j < buf2_size; j++) {
       match += (R2[j] == COM) ? 1 : 0;
     }
-    double r = match / static_cast <double> (buf1_size + buf2_size);
+     */
+    
+    double b = static_cast<double>(buf1_size + buf2_size);
+    // debug(true, "%f, %f", matchd / b, match / b);
+    // double r = match / static_cast <double> (buf1_size + buf2_size);
+    double r = matchd / b;
     
     const bool DBG = false;
     if (DBG) {
